@@ -248,7 +248,7 @@ class myImage(Image):
         # Pack them canvas & pointer values:
         coorData = (cx, cy, w, h, pointX, pointY)
         # Perform coordinates check:
-        inCanvas = checkCoordinates(coorData, touch)
+        inCanvas = True # checkCoordinates(coorData, touch)
 
         # If inside canvas, draw:
         if inCanvas:
@@ -278,7 +278,7 @@ class myImage(Image):
         # Pack them canvas & pointer values:
         coorData = (cx, cy, w, h, pointX, pointY)
         # Perform coordinates check:
-        inCanvas = checkCoordinates(coorData, touch)
+        inCanvas = True # checkCoordinates(coorData, touch)
 
         # If inside canvas, draw:
         if inCanvas:
