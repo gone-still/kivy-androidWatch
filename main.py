@@ -28,13 +28,13 @@ imageName = "raw_"
 processedImageName = "processed_"
 
 # Main project/app path:
-appPath = "D://opencvImages//"  # primary_external_storage_path(),
+appPath = "D://opencvImages//"  # primary_external_storage_path()
 
 # Relative Dirs:
-baseDir = "androidWatch//"
-samplesDir = "samples//"
-modelDir = "model//win//"
-modelFilename = "svmModel.xml"
+baseDir = "androidWatch//"  # App base directory
+samplesDir = "samples//"  # Directory of saved image samples
+modelDir = "model//win//"  # Directory where the SVM model resides
+modelFilename = "svmModel.xml"  # Name of the SVM model file
 
 # Image(canvas) and Label variables:
 image = Image()
@@ -44,13 +44,21 @@ label = Label()
 # of the image to write:
 outPath = ""
 dateString = ""
-
+classifiedChar = ""
 
 # Images and Cell Sizes:
+saveSize = (200, 200)
+processSize = (100, 100)
+
+cellHeight = processSize[0]
+cellWidth = processSize[1]
 
 # SVM variables:
+svmLoaded = False
+SVM = cv2.ml.SVM_create()
 
 # The class dictionary:
+classDictionary = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
 
 
 # Android check permissions overdrive:
@@ -87,7 +95,7 @@ def waitInput(delay=0):
 # Defines a re-sizable image window:
 def showImage(imageName, inputImage):
     cv2.namedWindow(imageName, cv2.WINDOW_NORMAL)
-    showImage(imageName, inputImage)
+    cv2.imshow(imageName, inputImage)
     waitInput()
 
 
@@ -180,6 +188,59 @@ def postProcessSample():
     # Read image as grayscale:
     inputImage = readImage(inputFilename)
 
+    # Input image
+    # showImage("inputImage", inputImage)
+
+    # Get height and width:
+    (inputImageHeight, inputImageWidth) = inputImage.shape[:2]
+
+    # Threshold (Umbralizacion/Binarizacion)
+    # Conversion of an grayscale image to a binary image
+    # Threshold is at 128 -> pixel>= 128 - > white (outPixel = 255), otherwise, outPixel = 0
+    # OTSU (automatic calculation of threshold value)
+    _, binaryImage = cv2.threshold(inputImage, 128, 255, cv2.THRESH_BINARY)
+    # showImage("binaryImage", binaryImage)
+
+    # Get first row (of the binary image):
+    # Numpy Slicing (Extracts one small array of a bigger one)
+    binaryRow = binaryImage[0:1, :]
+    # showImage("binaryRow", binaryRow)
+
+    # Get Bounding Rectangle:
+    # the function receives a binary image:
+    rect = cv2.boundingRect(binaryRow)
+
+    # Print the bounding rectangle coordinates
+    # (topLeft(x,y), width, height)
+    # print(rect)
+
+    # Set the cropping dimensions:
+    cropX = rect[0]
+    cropY = 0
+    cropWidth = rect[2]
+    cropHeight = inputImageHeight
+
+    # Crop the image (Numpy Slicing):
+    croppedImage = binaryImage[cropY:cropY + cropHeight, cropX:cropX + cropWidth]
+    # showImage("croppedImage", croppedImage)
+
+    # Resize the image:
+    aspectRatio = cropHeight / cropWidth
+    rescaledWidth = saveSize[0]
+    rescaledHeight = int(rescaledWidth * aspectRatio)
+    newSize = (rescaledWidth, rescaledHeight)
+
+    # Call the resize function:
+    croppedImage = cv2.resize(croppedImage, newSize, interpolation=cv2.INTER_NEAREST)
+    # showImage("croppedImage [resized]", croppedImage)
+
+    # Save the processed image:
+    fileName = processedImageName + dateString + ".png"  # png -> Lossless Compression ; jpeg -> Lossy Compression
+    outImagePath = os.path.join(outPath, fileName)
+
+    # Write the output file:
+    writeImage(outImagePath, croppedImage)
+
 
 # Process the image via OpenCV before passing it to
 # the SVM:
@@ -200,11 +261,40 @@ def loadSvm(filePath):
     modelPath = os.path.join(filePath, modelFilename)
     print("loadSvm>> Loading SVM model: " + modelPath)
 
+    # Create SVM is ready to predict
+    global SVM
+    SVM = cv2.ml.SVM_load(modelPath)
+
+    # Check if SVM is ready to classify:
+    svmTrained = SVM.isTrained()
+
+    if svmTrained:
+        print("loadSVM>> SVM loaded, trained and ready to test")
+        return True
+    else:
+        print("loadSVM>> Warning: SVM is NOT trained!")
+        return False
+
 
 # Implements the SVM and classifies a
 # sample:
 def classifyImage(*args):
     print("classifyImage>> Classifying image...")
+
+    svmLabel = " "
+
+    print("classifyImage>> SVM says: " + svmLabel)
+
+    global label
+    global classifiedChar
+
+    # Clear the dots:
+    if label.text == "...":
+        label.text = ""
+
+    # Concatenate char to char on label:
+    classifiedChar = label.text
+    label.text = classifiedChar + svmLabel
 
 
 # Check if pointer coordinates are inside an area:
@@ -248,7 +338,7 @@ class myImage(Image):
         # Pack them canvas & pointer values:
         coorData = (cx, cy, w, h, pointX, pointY)
         # Perform coordinates check:
-        inCanvas = True # checkCoordinates(coorData, touch)
+        inCanvas = checkCoordinates(coorData, touch)
 
         # If inside canvas, draw:
         if inCanvas:
@@ -278,7 +368,7 @@ class myImage(Image):
         # Pack them canvas & pointer values:
         coorData = (cx, cy, w, h, pointX, pointY)
         # Perform coordinates check:
-        inCanvas = True # checkCoordinates(coorData, touch)
+        inCanvas = checkCoordinates(coorData, touch)
 
         # If inside canvas, draw:
         if inCanvas:
@@ -319,6 +409,12 @@ class MyPaintApp(App):
 
     def build(self):
         screenSize = Window.size
+
+        global appPath
+        appPath = os.path.join(appPath, baseDir)
+
+        # Should the SVM be loaded?
+        global svmLoaded
 
         # Set the layout with extra parameters: # spacing = 10 , padding = 40
         # global layout
