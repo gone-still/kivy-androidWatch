@@ -1,3 +1,10 @@
+# File        :   main.py (Android Watch)
+# Version     :   1.1.0
+# Description :   Mobile/Desktop app that implements character recognition via touchscreen
+# Date:       :   Jan 15, 2022
+# Author      :   Ricardo Acevedo-Avila (racevedoaa@gmail.com)
+# License     :   MIT
+
 import os
 
 from kivy.app import App
@@ -33,7 +40,7 @@ appPath = "D://opencvImages//"  # primary_external_storage_path()
 # Relative Dirs:
 baseDir = "androidWatch//"  # App base directory
 samplesDir = "samples//"  # Directory of saved image samples
-modelDir = "model//win//"  # Directory where the SVM model resides
+modelDir = "model//android//"  # Directory where the SVM model resides
 modelFilename = "svmModel.xml"  # Name of the SVM model file
 
 # Image(canvas) and Label variables:
@@ -53,12 +60,15 @@ processSize = (100, 100)
 cellHeight = processSize[0]
 cellWidth = processSize[1]
 
+# The color of the (gray) canvas:
+canvasColor = 192
+
 # SVM variables:
 svmLoaded = False
 SVM = cv2.ml.SVM_create()
 
 # The class dictionary:
-classDictionary = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E"}
+classDictionary = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E", 5: "F"}
 
 
 # Android check permissions overdrive:
@@ -125,6 +135,106 @@ def writeImage(imagePath, inputImage):
         waitInput()
 
 
+# Function that fills corners of a square image:
+# ( cv::Mat &inputImage, int fillColor = 255, int fillOffsetX = 10, int fillOffsetY = 10, cv::Scalar fillTolerance = 4 )
+def fillCorners(binaryImage, fillColor=255, fillOffsetX=10, fillOffsetY=10):
+    # Get image dimensions:
+    (imageHeight, imageWidth) = binaryImage.shape[:2]
+    # Flood-fill corners:
+    for j in range(2):
+        # Compute y coordinate:
+        fillY = int(imageHeight * j + (-2 * j + 1) * fillOffsetY)
+        for i in range(2):
+            # Compute x coordinate:
+            fillX = int(imageWidth * i + (-2 * i + 1) * fillOffsetX)
+            # Flood-fill the image:
+            cv2.floodFill(binaryImage, mask=None, seedPoint=(fillX, fillY), newVal=(fillColor))
+            # print("X: " + str(fillX) + ", Y: " + str(fillY))
+            # showImage("Flood-Fill", binaryImage)
+
+    return binaryImage
+
+
+# Gets the bounding box of a blob via horizontal and
+# Vertical projections, crop the blob and returns it:
+
+def getCharacterBlob(binaryImage, verbose):
+    # Set number of reductions (dimensions):
+    dimensions = 2
+    # Store the data of the final bounding boxes here,
+    # 4 elements cause the list is [x,y,w,h]
+    boundingRect = [None] * 4
+
+    # Reduce the image:
+    for i in range(dimensions):
+        # Reduce image, first horizontal, then vertical:
+        reducedImg = cv2.reduce(binaryImage, i, cv2.REDUCE_MAX)
+        # showImage("Reduced Image: " + str(i), reducedImg)
+
+        # Get contours, inspect bounding boxes and
+        # get the starting (smallest) X and ending (largest) X
+
+        # Find the contours on the binary image:
+        contours, hierarchy = cv2.findContours(reducedImg, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Create temporal list to store the rectangle data:
+        tempRect = []
+
+        # Get the largest contour in the contours list:
+        for j, c in enumerate(contours):
+            currentRectangle = cv2.boundingRect(c)
+
+            # Get the dimensions of the bounding rect:
+            rectX = currentRectangle[0]
+            rectY = currentRectangle[1]
+            rectWidth = currentRectangle[2]
+            rectHeight = currentRectangle[3]
+            # print("Dimension: " + str(i) + " x: " + str(rectX) + " y: " + str(rectY) + " w: " + str(
+            #    rectWidth) + " h: " + str(rectHeight))
+
+            if i == 0:
+                # Horizontal dimension, check Xs:
+                tempRect.append(rectX)
+                tempRect.append(rectX + rectWidth)
+            else:
+                # Vertical dimension, check Ys:
+                tempRect.append(rectY)
+                tempRect.append(rectY + rectHeight)
+
+        # Extract the smallest and largest coordinates:
+        # print(tempRect)
+        currentMin = min(tempRect)
+        currentMax = max(tempRect)
+        # print("Dimension: " + str(i) + " Start X: " + str(currentMin) + ", End X: " + str(currentMax))
+        # Store into bounding rect list as [x,y,w,h]:
+        boundingRect[i] = currentMin
+        boundingRect[i + 2] = currentMax - currentMin
+        # print(boundingRect)
+
+    print("getCharacterBlob>> Bounding box computed, dimensions as [x,y,w,h] follow: ")
+    print(boundingRect)
+
+    # Check out bounding box:
+    if verbose:
+        binaryImageColor = cv2.cvtColor(binaryImage, cv2.COLOR_GRAY2BGR)
+        color = (0, 0, 255)
+        cv2.rectangle(binaryImageColor, (int(boundingRect[0]), int(boundingRect[1])),
+                      (int(boundingRect[0] + boundingRect[2]), int(boundingRect[1] + boundingRect[3])), color, 2)
+        # showImage("BBox", binaryImageColor)
+
+    # Crop the character blob:
+    cropX = boundingRect[0]
+    cropY = boundingRect[1]
+    cropWidth = boundingRect[2]
+    cropHeight = boundingRect[3]
+
+    # Crop the image via Numpy Slicing:
+    croppedImage = binaryImage[cropY:cropY + cropHeight, cropX:cropX + cropWidth]
+    print("getCharacterBlob>> Cropped image using bounding box data. ")
+
+    return croppedImage
+
+
 def saveSample(*args):
     print("saveSample>> Saving image sample..")
 
@@ -187,59 +297,65 @@ def postProcessSample():
 
     # Read image as grayscale:
     inputImage = readImage(inputFilename)
-
-    # Input image
     # showImage("inputImage", inputImage)
 
     # Get height and width:
     (inputImageHeight, inputImageWidth) = inputImage.shape[:2]
 
-    # Threshold (Umbralizacion/Binarizacion)
-    # Conversion of an grayscale image to a binary image
-    # Threshold is at 128 -> pixel>= 128 - > white (outPixel = 255), otherwise, outPixel = 0
-    # OTSU (automatic calculation of threshold value)
-    _, binaryImage = cv2.threshold(inputImage, 128, 255, cv2.THRESH_BINARY)
-    # showImage("binaryImage", binaryImage)
+    # Fill the corners with canvas image
+    inputImage = fillCorners(inputImage, fillOffsetX=5, fillOffsetY=5, fillColor=canvasColor)
+    # showImage("inputImage [FF]", inputImage)
 
-    # Get first row (of the binary image):
-    # Numpy Slicing (Extracts one small array of a bigger one)
-    binaryRow = binaryImage[0:1, :]
-    # showImage("binaryRow", binaryRow)
+    # Threshold the image, canvas color (192) = black, line color (0) = white
+    _, binaryImage = cv2.threshold(inputImage, 1, 255, cv2.THRESH_BINARY_INV)
+    # showImage("Binary Image", binaryImage)
 
-    # Get Bounding Rectangle:
-    # the function receives a binary image:
-    rect = cv2.boundingRect(binaryRow)
+    # Get character bounding box via projections and crop it:
+    print("postProcessSample>> Extracting character blob...")
+    characterBlob = getCharacterBlob(binaryImage, True)
+    # showImage("characterBlob", characterBlob)
 
-    # Print the bounding rectangle coordinates
-    # (topLeft(x,y), width, height)
-    # print(rect)
+    # Create target canvas with the smallest original dimension:
+    largestDimension = min((inputImageHeight, inputImageWidth))
+    print("postProcessSample>> Largest Dimension: " + str(largestDimension))
+    print("postProcessSample>> Creating canvas of: " + str(largestDimension) + " x " + str(largestDimension))
 
-    # Set the cropping dimensions:
-    cropX = rect[0]
-    cropY = 0
-    cropWidth = rect[2]
-    cropHeight = inputImageHeight
+    characterCanvas = np.zeros((largestDimension, largestDimension), np.uint8)
+    # showImage("characterCanvas", characterCanvas)
 
-    # Crop the image (Numpy Slicing):
-    croppedImage = binaryImage[cropY:cropY + cropHeight, cropX:cropX + cropWidth]
-    # showImage("croppedImage", croppedImage)
+    # Get canvas centroid (it is a square):
+    canvasX = 0.5 * largestDimension
+    canvasY = canvasX
 
-    # Resize the image:
-    aspectRatio = cropHeight / cropWidth
-    rescaledWidth = saveSize[0]
-    rescaledHeight = int(rescaledWidth * aspectRatio)
-    newSize = (rescaledWidth, rescaledHeight)
+    # Get character centroid:
+    (blobHeight, blobWidth) = characterBlob.shape[:2]
 
-    # Call the resize function:
-    croppedImage = cv2.resize(croppedImage, newSize, interpolation=cv2.INTER_NEAREST)
-    # showImage("croppedImage [resized]", croppedImage)
+    # Get paste x and y:
+    pasteX = int(canvasX - 0.5 * blobWidth)
+    pasteY = int(canvasY - 0.5 * blobHeight)
+    print("postProcessSample>> Pasting at X: " + str(pasteX) + " ,Y: " + str(pasteY) + " W: " + str(
+        blobWidth) + ", H: " + str(blobHeight))
+
+    # Paste character blob into new canvas:
+    characterCanvas[pasteY:pasteY + blobHeight, pasteX:pasteX + blobWidth] = characterBlob
+    # Invert image:
+    characterCanvas = 255 - characterCanvas
+    # showImage("Pasted Image", characterCanvas)
+
+    # Resize the image?
+    (resizeWidth, resizeHeight) = saveSize
+    if resizeWidth != largestDimension or resizeHeight != largestDimension:
+        print("postProcessSample>> Resizing binary image to: " + str(resizeWidth) + " x " + str(resizeHeight))
+        # Call the resize function:
+        characterCanvas = cv2.resize(characterCanvas, saveSize, interpolation=cv2.INTER_NEAREST)
+        showImage("croppedImage [resized]", characterCanvas)
 
     # Save the processed image:
     fileName = processedImageName + dateString + ".png"  # png -> Lossless Compression ; jpeg -> Lossy Compression
     outImagePath = os.path.join(outPath, fileName)
 
     # Write the output file:
-    writeImage(outImagePath, croppedImage)
+    writeImage(outImagePath, characterCanvas)
 
 
 # Process the image via OpenCV before passing it to
@@ -251,6 +367,38 @@ def preProcessSample(outPath, dateString):
 
     # Open image as grayscale:
     inputImage = readImage(inputFilename)
+
+    # showImage("inputImage", inputImage)
+
+    # Invert image
+    # 0 (Black) - Noise, 255 (White) - Shape to analyze
+    inputImage = 255 - inputImage
+
+    # showImage("inputImage [Inverted]", inputImage)
+
+    # Set the resizing parameters:
+    (imageHeight, imageWidth) = inputImage.shape[:2]
+    aspectRatio = imageHeight / imageWidth
+    rescaledWidth = cellWidth
+    rescaledHeight = int(rescaledWidth * aspectRatio)
+    newSize = (rescaledWidth, rescaledHeight)
+
+    # Resize image:
+    inputImage = cv2.resize(inputImage, newSize, interpolation=cv2.INTER_NEAREST)
+
+    # showImage("inputImage [Resized]", inputImage)
+
+    # Morphological Filtering
+    # Set filter kernel:
+    kernelSize = (3, 3)
+    opIterations = 2
+    morphKernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernelSize)
+
+    # Perform Dilate:
+    inputImage = cv2.morphologyEx(inputImage, cv2.MORPH_DILATE, morphKernel, None, None, opIterations,
+                                  cv2.BORDER_REFLECT101)
+
+    # showImage("Dilate", inputImage)
 
     return inputImage
 
@@ -281,7 +429,27 @@ def loadSvm(filePath):
 def classifyImage(*args):
     print("classifyImage>> Classifying image...")
 
-    svmLabel = " "
+    # Save canvas to image:
+    saveImage()
+
+    # Postprocess image:
+    postProcessSample()
+
+    # Preprocess image before sending it to the SVM
+    processedImage = preProcessSample(outPath, dateString)
+    print("classifyImage>> Sample successfully saved and preprocessed.")
+
+    # Reshape the image into a plain vector:
+    # Convert data type to float 32
+    testImage = processedImage.reshape(-1, cellWidth * cellHeight).astype(np.float32)
+
+    # Classify "image" (vector)
+    svmResult = SVM.predict(testImage)[1]
+    svmResult = svmResult[0][0]
+    print("classifyImage>> svmResult: " + str(svmResult))
+
+    # Get character from dictionary:
+    svmLabel = classDictionary[svmResult]
 
     print("classifyImage>> SVM says: " + svmLabel)
 
@@ -415,6 +583,17 @@ class MyPaintApp(App):
 
         # Should the SVM be loaded?
         global svmLoaded
+
+        if not svmLoaded:
+            # The SVM was not previously loaded:
+            print("build>> Loading SVM for the first time.")
+            svmFilePath = os.path.join(appPath, modelDir)
+            opSuccessful = loadSvm(svmFilePath)
+
+            if opSuccessful:
+                svmLoaded = True
+            else:
+                print("build>> Failed to load SVM file. Check traceback.")
 
         # Set the layout with extra parameters: # spacing = 10 , padding = 40
         # global layout
