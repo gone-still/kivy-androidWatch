@@ -40,7 +40,7 @@ appPath = "D://opencvImages//"  # primary_external_storage_path()
 # Relative Dirs:
 baseDir = "androidWatch//"  # App base directory
 samplesDir = "samples//"  # Directory of saved image samples
-modelDir = "model//android//"  # Directory where the SVM model resides
+modelDir = "model//win//"  # Directory where the SVM model resides
 modelFilename = "svmModel.xml"  # Name of the SVM model file
 
 # Image(canvas) and Label variables:
