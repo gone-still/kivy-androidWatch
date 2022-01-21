@@ -1,7 +1,7 @@
 # File        :   main.py (Android Watch)
-# Version     :   1.1.0
+# Version     :   1.1.1
 # Description :   Mobile/Desktop app that implements character recognition via touchscreen
-# Date:       :   Jan 15, 2022
+# Date:       :   Jan 20, 2022
 # Author      :   Ricardo Acevedo-Avila (racevedoaa@gmail.com)
 # License     :   MIT
 
@@ -40,7 +40,7 @@ appPath = "D://opencvImages//"  # primary_external_storage_path()
 # Relative Dirs:
 baseDir = "androidWatch//"  # App base directory
 samplesDir = "samples//"  # Directory of saved image samples
-modelDir = "model//win//"  # Directory where the SVM model resides
+modelDir = "model//android//"  # Directory where the SVM model resides
 modelFilename = "svmModel.xml"  # Name of the SVM model file
 
 # Image(canvas) and Label variables:
@@ -68,7 +68,9 @@ svmLoaded = False
 SVM = cv2.ml.SVM_create()
 
 # The class dictionary:
-classDictionary = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E", 5: "F"}
+classDictionary = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E", 5: "F", 6: "G", 7: "H", 8: "I", 9: "J",
+                   10: "K", 11: "L", 12: "M", 13: "N", 14: "O", 15: "P", 16: "Q", 17: "R", 18: "S", 19: "T",
+                   20: "U", 21: "V", 22: "W", 23: "X", 24: "Y", 25: "Z"}
 
 
 # Android check permissions overdrive:
@@ -220,7 +222,7 @@ def getCharacterBlob(binaryImage, verbose):
         color = (0, 0, 255)
         cv2.rectangle(binaryImageColor, (int(boundingRect[0]), int(boundingRect[1])),
                       (int(boundingRect[0] + boundingRect[2]), int(boundingRect[1] + boundingRect[3])), color, 2)
-        # showImage("BBox", binaryImageColor)
+        showImage("BBox", binaryImageColor)
 
     # Crop the character blob:
     cropX = boundingRect[0]
@@ -340,7 +342,7 @@ def postProcessSample():
     characterCanvas[pasteY:pasteY + blobHeight, pasteX:pasteX + blobWidth] = characterBlob
     # Invert image:
     characterCanvas = 255 - characterCanvas
-    # showImage("Pasted Image", characterCanvas)
+    showImage("Pasted Image", characterCanvas)
 
     # Resize the image?
     (resizeWidth, resizeHeight) = saveSize
