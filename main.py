@@ -1,7 +1,7 @@
 # File        :   main.py (Android Watch)
-# Version     :   1.1.1
+# Version     :   1.1.2
 # Description :   Mobile/Desktop app that implements character recognition via touchscreen
-# Date:       :   Jan 20, 2022
+# Date:       :   May 23, 2022
 # Author      :   Ricardo Acevedo-Avila (racevedoaa@gmail.com)
 # License     :   MIT
 
@@ -40,7 +40,7 @@ appPath = "D://opencvImages//"  # primary_external_storage_path()
 # Relative Dirs:
 baseDir = "androidWatch//"  # App base directory
 samplesDir = "samples//"  # Directory of saved image samples
-modelDir = "model//android//"  # Directory where the SVM model resides
+modelDir = "model//win//"  # Directory where the SVM model resides
 modelFilename = "svmModel.xml"  # Name of the SVM model file
 
 # Image(canvas) and Label variables:
@@ -222,7 +222,7 @@ def getCharacterBlob(binaryImage, verbose):
         color = (0, 0, 255)
         cv2.rectangle(binaryImageColor, (int(boundingRect[0]), int(boundingRect[1])),
                       (int(boundingRect[0] + boundingRect[2]), int(boundingRect[1] + boundingRect[3])), color, 2)
-        showImage("BBox", binaryImageColor)
+        # showImage("BBox", binaryImageColor)
 
     # Crop the character blob:
     cropX = boundingRect[0]
@@ -342,7 +342,7 @@ def postProcessSample():
     characterCanvas[pasteY:pasteY + blobHeight, pasteX:pasteX + blobWidth] = characterBlob
     # Invert image:
     characterCanvas = 255 - characterCanvas
-    showImage("Pasted Image", characterCanvas)
+    # showImage("Pasted Image", characterCanvas)
 
     # Resize the image?
     (resizeWidth, resizeHeight) = saveSize
@@ -350,7 +350,7 @@ def postProcessSample():
         print("postProcessSample>> Resizing binary image to: " + str(resizeWidth) + " x " + str(resizeHeight))
         # Call the resize function:
         characterCanvas = cv2.resize(characterCanvas, saveSize, interpolation=cv2.INTER_NEAREST)
-        showImage("croppedImage [resized]", characterCanvas)
+        # showImage("croppedImage [resized]", characterCanvas)
 
     # Save the processed image:
     fileName = processedImageName + dateString + ".png"  # png -> Lossless Compression ; jpeg -> Lossy Compression
