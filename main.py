@@ -1,7 +1,7 @@
 # File        :   main.py (Android Watch)
-# Version     :   1.2.0
+# Version     :   1.3.0
 # Description :   Mobile/Desktop app that implements character recognition via touchscreen
-# Date:       :   May 23, 2022
+# Date:       :   May 24, 2022
 # Author      :   Ricardo Acevedo-Avila (racevedoaa@gmail.com)
 # License     :   MIT
 
@@ -28,6 +28,9 @@ Window.clearcolor = (1, 1, 1, 1)  # RGBA
 # My goddamn globals:
 # Set platform to "win" or "android"
 platform = "win"
+# Set main dirs:
+rootDrive = "D:"
+rootDir = "opencvImages"
 
 canvasName = "imageCanvas.png"
 imagePath = ""
@@ -36,7 +39,7 @@ processedImageName = "processed_"
 
 # Main project/app path:
 if platform == "win":
-    appPath = "D://opencvImages//"
+    appPath = os.path.join(rootDrive, rootDir)
 else:
     # Import additional android libs:
     print("androidWatch>> Setting up Android libs...")
@@ -47,8 +50,8 @@ else:
     appPath = primary_external_storage_path()
 
 # Relative Dirs:
-baseDir = "androidWatch//"  # App base directory
-samplesDir = "samples//"  # Directory of saved image samples
+baseDir = "androidWatch"  # App base directory
+samplesDir = "samples"  # Directory of saved image samples
 modelDir = os.path.join("model", platform)  # Directory where the SVM model resides
 modelFilename = "svmModel.xml"  # Name of the SVM model file
 
@@ -84,7 +87,12 @@ classDictionary = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E", 5: "F", 6: "G", 7: "H
 # Button dictionaries:
 # Order is label, reset, save, classify, button offset
 buttonPositions = {"win": [2.3, 0.7, 0.3, -0.1, 0],
-                   "android": [0.8, 0.5, 0.2, -0.1, 100]}
+                   "android": [0.8, 0.5, 0.3, 0.1, 100]}
+# Label Width
+labelWidth = {"win": 0, "android": 20}
+
+# Brush Thickness:
+brushThickness = {"win": 2.5, "android": 5}
 
 
 # Android check permissions overdrive:
@@ -158,13 +166,15 @@ def writeImage(imagePath, inputImage):
 def fillCorners(binaryImage, fillColor=255, fillOffsetX=10, fillOffsetY=10):
     # Get image dimensions:
     (imageHeight, imageWidth) = binaryImage.shape[:2]
+    print((imageHeight, imageWidth))
     # Flood-fill corners:
     for j in range(2):
         # Compute y coordinate:
-        fillY = int(imageHeight * j + (-2 * j + 1) * fillOffsetY)
+        fillY = int((imageHeight - 1) * j + (-2 * j + 1) * fillOffsetY)
         for i in range(2):
             # Compute x coordinate:
-            fillX = int(imageWidth * i + (-2 * i + 1) * fillOffsetX)
+            fillX = int((imageWidth - 1) * i + (-2 * i + 1) * fillOffsetX)
+            print(fillX, fillY)
             # Flood-fill the image:
             cv2.floodFill(binaryImage, mask=None, seedPoint=(fillX, fillY), newVal=(fillColor))
             # print("X: " + str(fillX) + ", Y: " + str(fillY))
@@ -321,7 +331,7 @@ def postProcessSample():
     (inputImageHeight, inputImageWidth) = inputImage.shape[:2]
 
     # Fill the corners with canvas image
-    inputImage = fillCorners(inputImage, fillOffsetX=5, fillOffsetY=5, fillColor=canvasColor)
+    inputImage = fillCorners(inputImage, fillOffsetX=0, fillOffsetY=0, fillColor=canvasColor)
     # showImage("inputImage [FF]", inputImage)
 
     # Threshold the image, canvas color (192) = black, line color (0) = white
@@ -533,7 +543,7 @@ class myImage(Image):
                 Color(*color)
                 d = 30.
                 # Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
-                touch.ud['line'] = Line(points=(touch.x, touch.y), width=2.5)
+                touch.ud['line'] = Line(points=(touch.x, touch.y), width=brushThickness[platform])
 
     # Call back for touch move event:
     def on_touch_move(self, touch):
@@ -595,7 +605,10 @@ class MyPaintApp(App):
 
     def build(self):
         screenSize = Window.size
-        print("build>> Platform set to: "+platform)
+        print("build>> Platform set to: " + platform)
+
+        # Request app permissions:
+        appPermisions()
 
         global appPath
         appPath = os.path.join(appPath, baseDir)
@@ -633,7 +646,7 @@ class MyPaintApp(App):
         # Create text label:
         global label
         label = TextInput(text="...", font_size='30sp', size_hint=(None, None),
-                          width=btnWidth, height=btnHeight,
+                          width=btnWidth + labelWidth[platform], height=btnHeight,
                           pos_hint={"center_x": 0.5, "center_y": buttonPositions[platform][0]})
 
         # Add to relative layout:
