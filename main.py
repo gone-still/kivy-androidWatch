@@ -1,5 +1,5 @@
 # File        :   main.py (Android Watch)
-# Version     :   1.1.2
+# Version     :   1.2.0
 # Description :   Mobile/Desktop app that implements character recognition via touchscreen
 # Date:       :   May 23, 2022
 # Author      :   Ricardo Acevedo-Avila (racevedoaa@gmail.com)
@@ -23,24 +23,33 @@ from datetime import date, datetime
 import cv2
 import numpy as np
 
-# from android.permissions import Permission, request_permissions, check_permission
-# from android.storage import app_storage_path, primary_external_storage_path, secondary_external_storage_path
-
 Window.clearcolor = (1, 1, 1, 1)  # RGBA
 
 # My goddamn globals:
+# Set platform to "win" or "android"
+platform = "win"
+
 canvasName = "imageCanvas.png"
 imagePath = ""
 imageName = "raw_"
 processedImageName = "processed_"
 
 # Main project/app path:
-appPath = "D://opencvImages//"  # primary_external_storage_path()
+if platform == "win":
+    appPath = "D://opencvImages//"
+else:
+    # Import additional android libs:
+    print("androidWatch>> Setting up Android libs...")
+    from android.permissions import Permission, request_permissions, check_permission
+    from android.storage import app_storage_path, primary_external_storage_path, secondary_external_storage_path
+
+    # Set android main app path:
+    appPath = primary_external_storage_path()
 
 # Relative Dirs:
 baseDir = "androidWatch//"  # App base directory
 samplesDir = "samples//"  # Directory of saved image samples
-modelDir = "model//win//"  # Directory where the SVM model resides
+modelDir = os.path.join("model", platform)  # Directory where the SVM model resides
 modelFilename = "svmModel.xml"  # Name of the SVM model file
 
 # Image(canvas) and Label variables:
@@ -72,31 +81,38 @@ classDictionary = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E", 5: "F", 6: "G", 7: "H
                    10: "K", 11: "L", 12: "M", 13: "N", 14: "O", 15: "P", 16: "Q", 17: "R", 18: "S", 19: "T",
                    20: "U", 21: "V", 22: "W", 23: "X", 24: "Y", 25: "Z"}
 
+# Button dictionaries:
+# Order is label, reset, save, classify, button offset
+buttonPositions = {"win": [2.3, 0.7, 0.3, -0.1, 0],
+                   "android": [0.8, 0.5, 0.2, -0.1, 100]}
+
 
 # Android check permissions overdrive:
-# def check_permissions(perms):
-#     for perm in perms:
-#         if check_permission(perm) != True:
-#             return False
-#     return True
-
-# Check permisions function:
-def appPermisions():
-    # perms = [Permission.WRITE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE]
-
-    # if check_permissions(perms) != True:
-    #
-    #     print("appPermisions>> We don't have W/R permissions!")
-    #     request_permissions(perms)
-    #     exit()
-    #     return False
-    #
-    # else:
-    #
-    #     print("appPermisions>> Got android permissions.")
-    #     return True
-
+def check_permissions(perms):
+    for perm in perms:
+        if check_permission(perm) != True:
+            return False
     return True
+
+
+# Check permissions function:
+def appPermisions():
+    if platform == "android":
+        perms = [Permission.WRITE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE]
+
+        if check_permissions(perms) != True:
+
+            print("appPermisions>> We don't have W/R permissions!")
+            request_permissions(perms)
+            exit()
+            return False
+
+        else:
+
+            print("appPermisions>> Got android permissions.")
+            return True
+    else:
+        return True
 
 
 # Waits for a keyboard event:
@@ -579,6 +595,7 @@ class MyPaintApp(App):
 
     def build(self):
         screenSize = Window.size
+        print("build>> Platform set to: "+platform)
 
         global appPath
         appPath = os.path.join(appPath, baseDir)
@@ -610,36 +627,41 @@ class MyPaintApp(App):
         r1 = RelativeLayout()
 
         # Set button parameters:
-        btnWidth = 200
-        btnHeight = 50
+        btnWidth = 200 + buttonPositions[platform][4]
+        btnHeight = 50 + buttonPositions[platform][4]
+
+        # Create text label:
+        global label
+        label = TextInput(text="...", font_size='30sp', size_hint=(None, None),
+                          width=btnWidth, height=btnHeight,
+                          pos_hint={"center_x": 0.5, "center_y": buttonPositions[platform][0]})
+
+        # Add to relative layout:
+        r1.add_widget(label)
 
         # Create button1:
         btn1 = Button(text="Reset", size_hint=(None, None), width=btnWidth, height=btnHeight,
-                      pos_hint={"center_x": 0.5, "center_y": 0.7})  # Adjust til it properly fits into the screen
+                      pos_hint={"center_x": 0.5, "center_y": buttonPositions[platform][
+                          1]})  # Adjust til it properly fits into the screen
         btn1.bind(on_press=image.clearImage)
         # Add to relative layout:
         r1.add_widget(btn1)
 
         # Create button2:
         btn2 = Button(text="Save", size_hint=(None, None), width=btnWidth, height=btnHeight,
-                      pos_hint={"center_x": 0.5, "center_y": 0.3})  # Adjust til it properly fits into the screen
+                      pos_hint={"center_x": 0.5, "center_y": buttonPositions[platform][
+                          2]})  # Adjust til it properly fits into the screen
         btn2.bind(on_press=saveSample)
         # Add to relative layout:
         r1.add_widget(btn2)
 
         # Create button3:
         btn3 = Button(text="Classify", size_hint=(None, None), width=btnWidth, height=btnHeight,
-                      pos_hint={"center_x": 0.5, "center_y": -0.1})  # Adjust til it properly fits into the screen
+                      pos_hint={"center_x": 0.5, "center_y": buttonPositions[platform][
+                          3]})  # Adjust til it properly fits into the screen
         btn3.bind(on_press=classifyImage)
         # Add to relative layout:
         r1.add_widget(btn3)
-
-        # Create text label:
-        global label
-        label = TextInput(text="...", font_size='30sp', size_hint=(None, None),
-                          width=btnWidth, height=btnHeight, pos_hint={"center_x": 0.5, "center_y": 2.3})
-        # Add to relative layout:
-        r1.add_widget(label)
 
         # Add the items to layout:
         layout.add_widget(image, 1)  # Image
